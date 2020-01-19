@@ -4,58 +4,46 @@
 Created on Fri Nov  1 20:13:02 2019
 
 @author: sebastianw
-
-TODO: Drop exact duplicates
 """
 
+import argparse
 import csv
-import glob
+import json
 import xmltodict
 
-filenames = glob.glob("/home/sebastianw/Downloads/gpxmerge/*.gpx")
-#filenames = glob.glob("/home/sebastianw/Downloads/gpxmerge/tablet.gpx")
+class HashableDict(dict):
+    def __hash__(self):
+        return hash(json.dumps(self, sort_keys=True))
 
-data = []
-for filename in filenames:
-    with open(filename) as handle:
-        data.extend(xmltodict.parse(handle.read())['gpx']['wpt'])
+def read_data(*files):
+    data = set()
+    for file in files:
+        for element in xmltodict.parse(file.read())['gpx']['wpt']:
+            data.add(HashableDict(element))
 
-data = sorted(data, key=lambda x: float(x['@lat']) + float(x['@lon']))
-#fieldnames = set()
-#for x in data:
-#    fieldnames.update(set(x.keys()))
-fieldnames = ['@lat', '@lon', 'name', 'cmt', 'desc', 'type']
+    data = sorted(data, key=lambda x: float(x['@lat']) + float(x['@lon']))
 
-colors = {'Sightseeing': '#b400842b',
- 'Travel': '#b4e044bb',
- 'Friends': '#b4eeee10',
- 'Transport': '#b4d00d0d',
- 'Tankstellen': '#b48e2512',
- 'Shops': '#b488e030',
- 'Work': '#b410c0f0',
- 'Uni': '#b400842b',
- 'Wanderung': '#b400842b',
- 'Waypoints': '#b4ff5020',
- 'Customers': '#b410c0f0',
- 'TODO': '#000000',
- 'Restaurant': '#000000'}
-
-def write_csv():
-    with open("/home/sebastianw/Downloads/gpxmerge/tablet.csv", 'w') as out:
-        writer = csv.DictWriter(out, fieldnames)
-        writer.writeheader()
-        writer.writerows(data)
-
-def read_csv():
-    with open("/home/sebastianw/Downloads/gpxmerge/out.csv") as handle:
-        return list(csv.DictReader(handle))
-
-categories = {}
-def read_categories():
+    categories = {}
     for wpt in data:
         if 'extensions' not in wpt:
             continue
         categories[wpt['type']] = wpt['extensions']['color']
+        del wpt['extensions']
+
+    return data, categories
+
+
+def write_csv(data, categories, csvfile, categoriesfile):
+    fieldnames = ['@lat', '@lon', 'name', 'cmt', 'desc', 'type']
+    writer = csv.DictWriter(csvfile, fieldnames)
+    writer.writeheader()
+    writer.writerows(data)
+    json.dump(categories, categoriesfile,
+              sort_keys=True, indent=True)
+
+def read_csv():
+    with open("/home/sebastianw/Downloads/gpxmerge/out.csv") as handle:
+        return list(csv.DictReader(handle))
 
 def write_gpx():
     with open("/home/sebastianw/Downloads/gpxmerge/gpxout", 'w') as handle:
@@ -75,3 +63,14 @@ def write_gpx():
     </extensions>
   </wpt>\n""")
         handle.write('</gpx>')
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser('gpx-favourites-merge')
+    subparsers = parser.add_subparsers()
+    gpx2csv = subparsers.add_parser('gpx2csv')
+    gpx2csv.add_argument('gpxfiles', nargs="+", type=argparse.FileType('r'))
+    gpx2csv.add_argument('outfile', type=argparse.FileType('w'))
+    gpx2csv.add_argument('categories', type=argparse.FileType('w'))
+    args = parser.parse_args()
+    data, categories = read_data(*args.gpxfiles)
+    write_csv(data, categories, args.outfile, args.categories)
