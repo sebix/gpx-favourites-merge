@@ -41,36 +41,50 @@ def write_csv(data, categories, csvfile, categoriesfile):
     json.dump(categories, categoriesfile,
               sort_keys=True, indent=True)
 
-def read_csv():
-    with open("/home/sebastianw/Downloads/gpxmerge/out.csv") as handle:
-        return list(csv.DictReader(handle))
+def read_csv(handle):
+    return list(csv.DictReader(handle))
 
-def write_gpx():
-    with open("/home/sebastianw/Downloads/gpxmerge/gpxout", 'w') as handle:
-        handle.write("""<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
+def write_gpx(data, colors, handle):
+    handle.write("""<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
 <gpx version="1.1" creator="OsmAnd+ 3.4.8" xmlns="http://www.topografix.com/GPX/1/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">
   <metadata>
     <name>favourites</name>
   </metadata>
 """)
-        for wpt in data:
-            handle.write(f"""  <wpt lat="{wpt['@lat']}" lon="{wpt['@lon']}">
-    <name>{wpt['name']}</name>
-    <type>{wpt['type']}</type>
-    <cmt>{wpt['cmt']}</cmt>
-    <extensions>
-      <color>{colors[wpt['type']]}</color>
-    </extensions>
+    for wpt in data:
+        handle.write(f"""  <wpt lat="{wpt['@lat']}" lon="{wpt['@lon']}">
+<name>{wpt['name']}</name>
+<type>{wpt['type']}</type>
+<cmt>{wpt['cmt']}</cmt>
+<extensions>
+  <color>{colors[wpt['type']]}</color>
+</extensions>
   </wpt>\n""")
-        handle.write('</gpx>')
+    handle.write('</gpx>')
+
+def gpx2csv(args):
+    data, categories = read_data(*args.gpxfiles)
+    write_csv(data, categories, args.outfile, args.categories)
+
+
+def csv2gpx(args):
+    data = read_csv(args.infile)
+    categories = json.load(args.categories)
+    write_gpx(data, categories, args.outfile)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('gpx-favourites-merge')
     subparsers = parser.add_subparsers()
-    gpx2csv = subparsers.add_parser('gpx2csv')
-    gpx2csv.add_argument('gpxfiles', nargs="+", type=argparse.FileType('r'))
-    gpx2csv.add_argument('outfile', type=argparse.FileType('w'))
-    gpx2csv.add_argument('categories', type=argparse.FileType('w'))
+    gpx2csvp = subparsers.add_parser('gpx2csv')
+    gpx2csvp.add_argument('gpxfiles', nargs="+", type=argparse.FileType('r'))
+    gpx2csvp.add_argument('outfile', type=argparse.FileType('w'))
+    gpx2csvp.add_argument('categories', type=argparse.FileType('w'))
+    gpx2csvp.set_defaults(func=gpx2csv)
+    csv2gpxp = subparsers.add_parser('csv2gpx')
+    csv2gpxp.add_argument('infile', type=argparse.FileType('r'))
+    csv2gpxp.add_argument('categories', type=argparse.FileType('r'))
+    csv2gpxp.add_argument('outfile', type=argparse.FileType('w'))
+    csv2gpxp.set_defaults(func=csv2gpx)
     args = parser.parse_args()
-    data, categories = read_data(*args.gpxfiles)
-    write_csv(data, categories, args.outfile, args.categories)
+    args.func(args)
